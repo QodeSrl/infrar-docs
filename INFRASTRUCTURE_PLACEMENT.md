@@ -281,76 +281,72 @@ Cloudflare Pages: infrar-web (Frontend)
     └── Environment Variables
         └── NEXT_PUBLIC_API_URL=https://api.infrar.io
 
-AWS Account: infrar-production
-└── eu-west-1 (Ireland - Primary EU Region)
-    ├── VPC (10.0.0.0/16)
-    │   ├── Public Subnets (3 AZs)
-    │   │   ├── NAT Gateways
-    │   │   └── Application Load Balancer
-    │   └── Private Subnets (3 AZs)
-    │       ├── ECS Tasks
-    │       └── RDS Instances
+Hetzner Cloud: infrar-production
+└── Falkenstein (Germany) or Helsinki (Finland)
     │
-    ├── ECS Fargate Cluster
-    │   ├── infrar-platform-api
-    │   │   ├── Min: 2 tasks
-    │   │   ├── Max: 10 tasks
-    │   │   └── Task: 1 vCPU, 2GB RAM
+    ├── Primary VPS (CPX31 or CCX23)
+    │   ├── CPU: 4 vCPU (AMD EPYC)
+    │   ├── RAM: 8 GB
+    │   ├── Storage: 160 GB NVMe SSD
+    │   ├── Network: 20 Gbit/s
+    │   ├── OS: Ubuntu 22.04 LTS
     │   │
-    │   ├── infrar-pricing-sync (Scheduled)
-    │   │   └── Runs daily at 02:00 UTC
+    │   ├── Docker Containers:
+    │   │   ├── infrar-platform (Go API)
+    │   │   │   ├── Port: 8080
+    │   │   │   ├── Replicas: 2 (Docker Swarm)
+    │   │   │   └── Auto-restart: always
+    │   │   │
+    │   │   ├── PostgreSQL 15
+    │   │   │   ├── Port: 5432 (localhost only)
+    │   │   │   ├── Data: /var/lib/postgresql
+    │   │   │   └── Backups: Daily to Hetzner Backup
+    │   │   │
+    │   │   ├── Redis 7
+    │   │   │   ├── Port: 6379 (localhost only)
+    │   │   │   └── Maxmemory: 2GB
+    │   │   │
+    │   │   ├── Nginx (Reverse Proxy)
+    │   │   │   ├── Port: 80, 443
+    │   │   │   ├── SSL: Let's Encrypt (auto-renew)
+    │   │   │   ├── Proxy: → infrar-platform:8080
+    │   │   │   └── Rate limiting: enabled
+    │   │   │
+    │   │   ├── Prometheus (Monitoring)
+    │   │   │   ├── Port: 9090 (localhost only)
+    │   │   │   └── Retention: 15 days
+    │   │   │
+    │   │   └── Grafana (Dashboards)
+    │   │       ├── Port: 3000 (localhost only)
+    │   │       └── Dashboards: API metrics, DB stats
     │   │
-    │   └── infrar-terraform-executor
-    │       ├── Min: 0 tasks
-    │       ├── Max: 5 tasks
-    │       └── Task: 2 vCPU, 4GB RAM
+    │   └── Firewall Rules:
+    │       ├── Inbound: 22 (SSH), 80 (HTTP), 443 (HTTPS)
+    │       └── Outbound: All allowed
     │
-    ├── RDS PostgreSQL
-    │   ├── Instance: db.t3.medium (Multi-AZ)
-    │   ├── Storage: 100GB GP3
-    │   ├── Backups: Daily, 30-day retention
-    │   ├── Replica: Read replica in us-east-1
-    │   └── Encryption: AES-256
+    ├── Hetzner Object Storage (S3-compatible)
+    │   ├── Bucket: infrar-uploads
+    │   ├── Bucket: infrar-artifacts
+    │   ├── Bucket: infrar-logs
+    │   ├── Location: Falkenstein (Germany)
+    │   └── Pricing: €0.005/GB/month
     │
-    ├── ElastiCache Redis
-    │   ├── Node: cache.t3.micro
-    │   └── Replicas: 1
+    ├── Hetzner Backup Service
+    │   ├── VPS snapshots: Daily
+    │   ├── Retention: 7 snapshots
+    │   ├── Cost: 20% of VPS price
+    │   └── Restore: < 1 hour
     │
-    ├── S3 Buckets
-    │   ├── infrar-prod-uploads
-    │   │   ├── Encryption: AES-256
-    │   │   ├── Versioning: Enabled
-    │   │   └── Lifecycle: Delete after 90 days
-    │   │
-    │   ├── infrar-prod-artifacts
-    │   │   ├── Encryption: AES-256
-    │   │   └── Lifecycle: Move to Glacier after 30 days
-    │   │
-    │   └── infrar-prod-logs
-    │       ├── Encryption: AES-256
-    │       └── Lifecycle: Delete after 30 days
+    ├── Hetzner Floating IP
+    │   ├── IP: api.infrar.io
+    │   ├── Failover: Automatic
+    │   └── Cost: €1.19/month
     │
-    ├── Secrets Manager
-    │   ├── User AWS credentials
-    │   ├── User GCP credentials
-    │   ├── Database credentials
-    │   └── API keys (Stripe, SendGrid, etc.)
-    │
-    ├── CloudWatch
-    │   ├── Logs (all services)
-    │   ├── Metrics (CPU, memory, requests)
-    │   ├── Alarms (error rates, latency)
-    │   └── Dashboards
-    │
-    ├── Application Load Balancer
-    │   ├── Target Group: ECS tasks
-    │   ├── Health Checks: /health
-    │   ├── SSL/TLS: Certificate Manager
-    │   └── WAF: Rate limiting, IP filtering
-    │
-    └── Route 53
-        ├── api.infrar.io → ALB
-        └── Health checks
+    └── Hetzner Load Balancer (Optional, for scaling)
+        ├── Type: LB11 (up to 20k connections)
+        ├── Health Checks: /health
+        ├── SSL Termination: Yes
+        └── Cost: €5.39/month
 
 ```
 
@@ -713,46 +709,38 @@ Deployed as ECS sidecar container
 
 ## Cost Analysis
 
-### Monthly Cost Breakdown (Production - EU Region)
+### Monthly Cost Breakdown (Production - Hetzner + Cloudflare)
 
-| Resource | Specification | Monthly Cost (EU) |
-|----------|--------------|-------------------|
+| Resource | Specification | Monthly Cost (€) | Monthly Cost ($) |
+|----------|--------------|------------------|------------------|
 | **Frontend** |
-| Cloudflare Pages | Free tier | **$0** ✅ |
-| **Compute** |
-| ECS Fargate (API) | 2-10 tasks, 1vCPU, 2GB | $150-750 |
-| ECS Fargate (Jobs) | On-demand | $20-50 |
-| **Database** |
-| RDS PostgreSQL | db.t3.medium, Multi-AZ (EU) | $150 |
-| RDS Storage | 100GB GP3 (EU) | $13 |
-| RDS Backups | 100GB | $11 |
-| **Caching** |
-| ElastiCache Redis | cache.t3.micro (EU) | $16 |
+| Cloudflare Pages | Free tier | **€0** | **$0** ✅ |
+| **Compute & Services** |
+| Hetzner VPS CPX31 | 4 vCPU, 8GB RAM, 160GB NVMe | €13.90 | ~$15 |
+| Hetzner Backup | Daily snapshots, 7-day retention | €2.78 | ~$3 |
+| Hetzner Floating IP | Static IP for api.infrar.io | €1.19 | ~$1.30 |
 | **Storage** |
-| S3 Standard (EU) | 100GB | $2.50 |
-| S3 Glacier (EU) | 500GB (after 30 days) | $2.10 |
-| **Networking** |
-| Application Load Balancer | 1 ALB | $24 |
-| NAT Gateway | 3 gateways (EU) | $105 |
-| Data Transfer Out | 100GB | $9 |
-| **Secrets** |
-| Secrets Manager | 50 secrets | $20 |
+| Hetzner Object Storage | 100GB | €0.50 | ~$0.55 |
+| **Optional (Scaling)** |
+| Hetzner Load Balancer | LB11 (if needed later) | €5.39 | ~$6 |
+| **Domain & DNS** |
+| Cloudflare DNS | Free | €0 | $0 |
 | **Monitoring** |
-| CloudWatch Logs | 10GB | $5 |
-| CloudWatch Metrics | Custom metrics | $10 |
-| **Container Registry** |
-| ECR | 10GB storage | $1 |
-| **Total (Low traffic)** | | **~$540/month** |
-| **Total (Medium traffic)** | | **~$850/month** |
-| **Total (High traffic)** | | **~$1,200/month** |
+| Self-hosted (Prometheus + Grafana) | Included in VPS | €0 | $0 |
+| **Total (MVP)** | | **€18.37** | **~$20/month** ✅ |
+| **Total (with Load Balancer)** | | **€23.76** | **~$26/month** |
+
+**Cost Comparison**:
+- **Hetzner**: €18-24/month (~$20-26)
+- **AWS EU**: $540-850/month
+- **Savings**: ~$520-830/month 🎉
 
 **Notes**:
-- Low traffic: < 10 users, < 100 deployments/month
-- Medium traffic: 50 users, 500 deployments/month
-- High traffic: 200 users, 2000 deployments/month
-- **Cloudflare Pages savings**: ~$20/month vs Vercel Pro
-- EU pricing is ~7-10% higher than US regions
-- GDPR-compliant data residency in EU
+- 💰 **Extremely cost-effective**: 95%+ savings vs AWS
+- 🇪🇺 **EU-based**: Servers in Germany/Finland (GDPR-compliant)
+- 📈 **Scalable**: Can upgrade VPS or add load balancer
+- 🔒 **Secure**: Isolated environment, firewall, backups
+- ⚡ **Fast**: NVMe SSDs, 20 Gbit/s network
 
 ---
 
@@ -760,14 +748,12 @@ Deployed as ECS sidecar container
 
 | Resource | Monthly Cost |
 |----------|--------------|
-| ECS Fargate (1 task) | $30 |
-| RDS db.t3.micro | $20 |
-| S3 Storage | $2 |
-| ALB | $22 |
-| Secrets Manager | $5 |
-| CloudWatch | $5 |
-| Vercel (included in Pro) | $0 |
-| **Total** | **~$84/month** |
+| Hetzner VPS CX21 | €5.83 (~$6.40) |
+| Hetzner Backup | €1.17 (~$1.30) |
+| Cloudflare Pages | $0 (Free) |
+| **Total** | **~$7.70/month** ✅ |
+
+**Savings vs AWS Staging**: ~$76/month
 
 ---
 
@@ -907,25 +893,26 @@ Private Subnet (RDS, Redis)
 
 ## 🏆 Final Recommendation
 
-### **Cloudflare Pages + AWS EU** (Option 5)
+### **Cloudflare Pages + Hetzner Cloud** (Option 6)
 
 **Rationale**:
 1. ✅ **Cloudflare Pages**: Free, fast, global CDN for Next.js
-2. ✅ **EU Data Residency**: GDPR-compliant, backend in EU region
-3. ✅ **Cost-Effective**: Cloudflare Pages is free (unlimited bandwidth)
-4. ✅ **Scalable**: Both platforms scale well
-5. ✅ **Global Performance**: Cloudflare's CDN (275+ cities) + AWS EU
-6. ✅ **Maintainable**: Managed services reduce ops burden
+2. ✅ **Hetzner Cloud**: EU-based, extremely cost-effective (~€50-100/month)
+3. ✅ **EU Data Residency**: GDPR-compliant, servers in Germany/Finland
+4. ✅ **Predictable Costs**: Fixed monthly pricing, no surprises
+5. ✅ **High Performance**: NVMe SSDs, AMD EPYC CPUs, 20 Gbit/s network
+6. ✅ **Simple Setup**: Easier than AWS, less complexity
 
 **Resource Summary**:
 ```
 Frontend: Cloudflare Pages (infrar.io) - Free
-Backend API: AWS ECS Fargate eu-west-1 (api.infrar.io)
-Database: AWS RDS PostgreSQL eu-west-1
-Caching: AWS ElastiCache Redis eu-west-1
-Storage: AWS S3 eu-west-1
-Secrets: AWS Secrets Manager eu-west-1
-Monitoring: AWS CloudWatch eu-west-1
+Backend API: Hetzner Cloud VPS (api.infrar.io)
+Database: PostgreSQL on Hetzner VPS
+Caching: Redis on same VPS
+Storage: Hetzner Object Storage (S3-compatible)
+Secrets: HashiCorp Vault on VPS or env variables
+Monitoring: Prometheus + Grafana on VPS
+Backups: Hetzner Backup Service
 ```
 
 ---
@@ -1006,7 +993,7 @@ git push origin main
 
 ---
 
-## Summary: Cloudflare Pages + AWS EU
+## Summary: Cloudflare Pages + Hetzner Cloud
 
 ### ✅ Final Architecture
 
@@ -1015,24 +1002,38 @@ git push origin main
 - Unlimited bandwidth
 - Automatic HTTPS
 - Git-based deployments
-- **Cost**: $0/month
+- **Cost**: €0/month ($0)
 
-**Backend**: AWS eu-west-1 (Ireland)
-- ECS Fargate for API
-- RDS PostgreSQL (Multi-AZ)
-- ElastiCache Redis
-- S3 for storage
-- Secrets Manager
-- **Cost**: ~$540-850/month
+**Backend**: Hetzner Cloud (Germany/Finland)
+- VPS CPX31: 4 vCPU, 8GB RAM
+- PostgreSQL 15 (Docker)
+- Redis 7 (Docker)
+- Nginx reverse proxy
+- Prometheus + Grafana
+- Hetzner Object Storage (S3-compatible)
+- Daily backups
+- **Cost**: ~€18/month (~$20)
 
-**Total Cost**: ~$540-850/month (saves $20/month vs Vercel)
+**Total Cost**: ~€18/month (~$20) ✅
+
+### 💰 Cost Comparison
+
+| Solution | Monthly Cost | Savings |
+|----------|-------------|---------|
+| **Hetzner + Cloudflare** | **~$20** | - |
+| AWS + Vercel | $620 | **$600 saved** |
+| AWS + Cloudflare | $540 | **$520 saved** |
+
+**Hetzner saves 97% vs AWS!** 🎉
 
 ### 🇪🇺 EU Benefits
 
-1. ✅ **GDPR Compliance**: Data stored in EU
+1. ✅ **GDPR Compliance**: Data stored in EU (Germany/Finland)
 2. ✅ **Data Residency**: No data leaves EU region
-3. ✅ **Low Latency**: For European users
+3. ✅ **Low Latency**: Excellent for European users
 4. ✅ **Regulatory Compliance**: Meets EU requirements
+5. ✅ **Simple Setup**: No complex AWS configuration
+6. ✅ **Predictable Costs**: Fixed monthly pricing
 
 ### 🚀 Deployment Flow
 
@@ -1041,11 +1042,52 @@ Developer pushes to GitHub
   ↓
 Cloudflare Pages: Auto-build frontend (FREE)
   ↓
-AWS ECR (eu-west-1): Build backend Docker image
+Hetzner VPS: Build Docker image
   ↓
-AWS ECS (eu-west-1): Deploy to Fargate
+Docker Swarm: Deploy containers (Go API, PostgreSQL, Redis, Nginx)
   ↓
-Live: infrar.io (Cloudflare) + api.infrar.io (AWS EU)
+Live: infrar.io (Cloudflare) + api.infrar.io (Hetzner)
+```
+
+### 📊 Hetzner VPS Options
+
+| Plan | vCPU | RAM | Storage | Network | Price/month |
+|------|------|-----|---------|---------|-------------|
+| **CX21** (Staging) | 2 | 4GB | 40GB | 20 Gbit/s | €5.83 (~$6.40) |
+| **CPX31** (Production) | 4 | 8GB | 160GB | 20 Gbit/s | €13.90 (~$15) ✅ |
+| **CCX23** (Alternative) | 4 | 16GB | 160GB | 20 Gbit/s | €27.90 (~$31) |
+| **CPX41** (Growth) | 8 | 16GB | 240GB | 20 Gbit/s | €27.90 (~$31) |
+
+**For MVP**: CPX31 is perfect (4 vCPU, 8GB RAM, €13.90/month)
+
+### 🔧 Technology Stack on Hetzner
+
+```yaml
+Operating System: Ubuntu 22.04 LTS
+Container Runtime: Docker + Docker Compose
+Orchestration: Docker Swarm (simple) or Kubernetes (later)
+
+Containers:
+  - infrar-platform (Go API)
+  - PostgreSQL 15
+  - Redis 7
+  - Nginx (reverse proxy + SSL)
+  - Prometheus (monitoring)
+  - Grafana (dashboards)
+
+Storage:
+  - VPS NVMe: Code, databases, logs
+  - Hetzner Object Storage: Uploads, artifacts (S3-compatible)
+
+Backups:
+  - Hetzner Backup: Daily VPS snapshots (7-day retention)
+  - PostgreSQL dumps: Daily to Object Storage
+
+Security:
+  - UFW Firewall (ports 22, 80, 443 only)
+  - Fail2ban (brute force protection)
+  - Let's Encrypt SSL (auto-renewal)
+  - SSH key authentication only
 ```
 
 ---
