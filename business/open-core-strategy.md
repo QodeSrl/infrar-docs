@@ -4,13 +4,13 @@
 
 ## Overview
 
-Infrar uses an **open core model** where the transformation engine and core functionality are fully open source (Apache 2.0), while advanced intelligence features and enterprise capabilities remain proprietary.
+Infrar uses an **open core model** where the transformation engine and core functionality are fully open source (GPL v3), while advanced intelligence features and enterprise capabilities remain proprietary.
 
 **Rationale**: Infrastructure tools require deep trust. Open sourcing the core transformation engine removes adoption barriers while enabling us to build sustainable business around high-value features.
 
 ---
 
-## What's Open Source (Apache 2.0)
+## What's Open Source (GPL v3)
 
 ### Core Transformation Engine
 **Repository**: [infrar-engine](https://github.com/QodeSrl/infrar-engine)
@@ -153,9 +153,9 @@ This model is proven by successful infrastructure companies:
 ## Licensing
 
 ### Open Source Components
-**License**: Apache License 2.0
+**License**: GNU General Public License v3.0
 
-All transformation engine, CLI, plugins, and SDKs use Apache 2.0:
+All transformation engine, CLI, plugins, and SDKs use GPL v3:
 - Permissive for commercial use
 - Explicit patent grant
 - Industry standard for infrastructure tools
@@ -169,7 +169,7 @@ Web platform, intelligence features, and enterprise capabilities require paid su
 ### Documentation
 **License**: Creative Commons Attribution 4.0 (CC BY 4.0)
 
-Documentation is freely available with attribution. Code examples in documentation use Apache 2.0.
+Documentation is freely available with attribution. Code examples in documentation use GPL v3.
 
 ---
 
@@ -190,7 +190,7 @@ See individual repository contributing guidelines for details.
 
 ### Can I use Infrar for free?
 
-Yes! The entire transformation engine, CLI, plugins, and SDKs are open source (Apache 2.0). You can:
+Yes! The entire transformation engine, CLI, plugins, and SDKs are open source (GPL v3). You can:
 - Transform code to any cloud provider
 - Self-host all deployments
 - Use in commercial projects
@@ -214,7 +214,7 @@ Yes! All core transformation functionality is open source. The paid features are
 
 ### Will core features stay open source?
 
-Yes. We're committed to keeping the transformation engine, plugins, CLI, and SDKs fully open source under Apache 2.0. This is fundamental to building trust in infrastructure tooling.
+Yes. We're committed to keeping the transformation engine, plugins, CLI, and SDKs fully open source under GPL v3. This is fundamental to building trust in infrastructure tooling.
 
 ### What if I need a feature that's proprietary?
 

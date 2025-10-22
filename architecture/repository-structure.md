@@ -15,7 +15,7 @@ Infrar is built as a distributed system across multiple repositories following a
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                    Open Source (Public)                      │
-│                      Apache 2.0 License                       │
+│                      GPL v3 License                       │
 ├─────────────────────────────────────────────────────────────┤
 │                                                               │
 │  ┌─────────────┐    ┌──────────────┐   ┌─────────────┐     │
@@ -57,7 +57,7 @@ Infrar is built as a distributed system across multiple repositories following a
 
 **Repository**: [`QodeSrl/infrar-engine`](https://github.com/QodeSrl/infrar-engine)
 **Status**: ✅ Created
-**License**: Apache License 2.0
+**License**: GNU General Public License v3.0
 **Language**: Go (recommended)
 **Visibility**: Public
 
@@ -123,7 +123,7 @@ Output: boto3.client('s3').upload_file('report.csv', 'data', 'report.csv')
 
 **Repository**: [`QodeSrl/infrar-sdk-python`](https://github.com/QodeSrl/infrar-sdk-python)
 **Status**: ✅ Created
-**License**: Apache License 2.0
+**License**: GNU General Public License v3.0
 **Language**: Python
 **Visibility**: Public
 
@@ -205,7 +205,7 @@ objects = list_objects(bucket='my-data-bucket', prefix='reports/')
 
 **Repository**: [`QodeSrl/infrar-plugins`](https://github.com/QodeSrl/infrar-plugins)
 **Status**: ✅ Created
-**License**: Apache License 2.0
+**License**: GNU General Public License v3.0
 **Language**: YAML/JSON (transformation rules) + Go (plugin logic)
 **Visibility**: Public
 
@@ -298,7 +298,7 @@ Community members can contribute:
 
 **Repository**: [`QodeSrl/infrar-cli`](https://github.com/QodeSrl/infrar-cli)
 **Status**: ✅ Created
-**License**: Apache License 2.0
+**License**: GNU General Public License v3.0
 **Language**: Go (recommended for CLIs)
 **Visibility**: Public
 
@@ -389,7 +389,7 @@ providers:
 
 **Repository**: [`QodeSrl/infrar-docs`](https://github.com/QodeSrl/infrar-docs)
 **Status**: ✅ Created
-**License**: Apache License 2.0
+**License**: GNU General Public License v3.0
 **Language**: Markdown
 **Visibility**: Public
 
