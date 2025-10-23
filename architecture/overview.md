@@ -2,538 +2,357 @@
 
 ## System Design
 
-Infrar is designed as a multi-layered platform that sits between user code and cloud providers, enabling infrastructure intelligence and seamless provider switching.
-
-**Note**: For details about the codebase organization and individual repositories, see [Repository Structure](./repository-structure.md).
+Infrar is a multi-cloud infrastructure platform built on a provider-agnostic plugin architecture. The system transforms cloud-agnostic code into native provider implementations and generates infrastructure configurations dynamically from templates.
 
 ## High-Level Architecture
 
 ```
-┌──────────────────────────────────────────────────────────────┐
-│                      User Layer                              │
-│                                                              │
-│  ┌──────────────────┐         ┌──────────────────┐         │
-│  │  GitHub Repo     │         │  Local Dev Env   │         │
-│  │  (infrar SDK)    │         │  (infrar SDK)    │         │
-│  └────────┬─────────┘         └──────────────────┘         │
-└───────────┼──────────────────────────────────────────────────┘
-            │ Webhook on push
-            ↓
-┌──────────────────────────────────────────────────────────────┐
-│                   Infrar Platform                            │
-│                                                              │
-│  ┌──────────────────────────────────────────────────────┐   │
-│  │               Web UI / API Gateway                   │   │
-│  │  - Authentication & Authorization                    │   │
-│  │  - Project Management                                │   │
-│  │  - Deployment Dashboard                              │   │
-│  └──────────────────┬───────────────────────────────────┘   │
-│                     │                                        │
-│  ┌──────────────────▼───────────────────────────────────┐   │
-│  │            Core Backend Services                     │   │
-│  │                                                      │   │
-│  │  ┌────────────────────┐  ┌─────────────────────┐   │   │
-│  │  │ Discovery Engine   │  │ Cost Intelligence   │   │   │
-│  │  │ - Scan cloud       │  │ - Pricing database  │   │   │
-│  │  │ - Map capabilities │  │ - Compare providers │   │   │
-│  │  └────────────────────┘  └─────────────────────┘   │   │
-│  │                                                      │   │
-│  │  ┌────────────────────┐  ┌─────────────────────┐   │   │
-│  │  │ Transformation     │  │ Capability Catalog  │   │   │
-│  │  │ Engine             │  │ - Definitions       │   │   │
-│  │  │ - AST parsing      │  │ - Implementations   │   │   │
-│  │  │ - Code generation  │  │ - Cost models       │   │   │
-│  │  └────────────────────┘  └─────────────────────┘   │   │
-│  │                                                      │   │
-│  │  ┌────────────────────┐  ┌─────────────────────┐   │   │
-│  │  │ Build & Deploy     │  │ Migration           │   │   │
-│  │  │ Pipeline           │  │ Orchestrator        │   │   │
-│  │  │ - Build Docker     │  │ - Plan migrations   │   │   │
-│  │  │ - Push to registry │  │ - Execute cutover   │   │   │
-│  │  │ - Apply OpenTofu   │  │ - Track progress    │   │   │
-│  │  └────────────────────┘  └─────────────────────┘   │   │
-│  └──────────────────────────────────────────────────────┘   │
-│                                                              │
-│  ┌──────────────────────────────────────────────────────┐   │
-│  │              Data Layer                              │   │
-│  │                                                      │   │
-│  │  ┌────────────┐  ┌─────────────┐  ┌─────────────┐  │   │
-│  │  │ PostgreSQL │  │ Object      │  │ Credential  │  │   │
-│  │  │ - Projects │  │ Storage     │  │ Vault       │  │   │
-│  │  │ - Deploys  │  │ - Configs   │  │ - Provider  │  │   │
-│  │  │ - Users    │  │ - States    │  │   keys      │  │   │
-│  │  └────────────┘  └─────────────┘  └─────────────┘  │   │
-│  └──────────────────────────────────────────────────────┘   │
-└───────────────────────────┬──────────────────────────────────┘
-                            │ Deploy via credentials
-                            ↓
-┌──────────────────────────────────────────────────────────────┐
-│                  Cloud Provider Layer                        │
-│                                                              │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐      │
-│  │     AWS      │  │     GCP      │  │    Azure     │      │
-│  │              │  │              │  │              │      │
-│  │ Customer     │  │ Customer     │  │ Customer     │      │
-│  │ Account      │  │ Project      │  │ Subscription │      │
-│  │              │  │              │  │              │      │
-│  │ Infrastructure│  │ Infrastructure│  │ Infrastructure│    │
-│  │ (Native SDK) │  │ (Native SDK) │  │ (Native SDK) │      │
-│  └──────────────┘  └──────────────┘  └──────────────┘      │
-└──────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────┐
+│                   User Application Layer                 │
+│                                                           │
+│  User writes code with Infrar SDK                        │
+│  (infrar-sdk-python, infrar-sdk-nodejs, etc.)            │
+└─────────────────────┬───────────────────────────────────┘
+                      │
+                      ↓
+┌─────────────────────────────────────────────────────────┐
+│                   Platform Layer                         │
+│                                                           │
+│  ┌──────────────────────────────────────────────────┐   │
+│  │  Infrar Platform API (Backend Services)          │   │
+│  │  - Project Management                            │   │
+│  │  - Transformation Orchestration                  │   │
+│  │  - Deployment Pipeline                           │   │
+│  │  - Authentication & Authorization                │   │
+│  └────────────────────┬─────────────────────────────┘   │
+│                       │                                   │
+│  ┌────────────────────▼─────────────────────────────┐   │
+│  │  Transformation Engine (infrar-engine)           │   │
+│  │  - AST Parsing                                   │   │
+│  │  - Code Analysis                                 │   │
+│  │  - Transformation Rules Application              │   │
+│  │  - Native Code Generation                        │   │
+│  └────────────────────┬─────────────────────────────┘   │
+│                       │                                   │
+│                       │ Loads                             │
+│                       ↓                                   │
+│  ┌───────────────────────────────────────────────────┐  │
+│  │  Provider Plugins (infrar-plugins)                │  │
+│  │                                                    │  │
+│  │  providers/                                       │  │
+│  │  ├── aws/          (authentication, services,     │  │
+│  │  ├── gcp/           terraform templates,          │  │
+│  │  └── azure/         transformation rules)         │  │
+│  └────────────────────┬──────────────────────────────┘  │
+└───────────────────────┼─────────────────────────────────┘
+                        │
+                        ↓
+┌─────────────────────────────────────────────────────────┐
+│              Cloud Provider Layer                        │
+│                                                           │
+│  ┌───────────────┐  ┌───────────────┐  ┌────────────┐  │
+│  │     AWS       │  │     GCP       │  │   Azure    │  │
+│  │               │  │               │  │            │  │
+│  │  - S3         │  │  - GCS        │  │  - Blob    │  │
+│  │  - Lambda     │  │  - Cloud Run  │  │  - App Svc │  │
+│  │  - RDS        │  │  - Cloud SQL  │  │  - SQL DB  │  │
+│  └───────────────┘  └───────────────┘  └────────────┘  │
+└─────────────────────────────────────────────────────────┘
 ```
 
 ## Core Components
 
-### 1. Web UI / API Gateway
+### 1. Infrar SDK
 
-**Purpose**: User-facing interface for managing projects and infrastructure
+**Purpose**: Provider-agnostic API for developers
 
-**Responsibilities**:
-- Authentication and authorization
-- Project creation and management
-- Provider selection and credential setup
-- Deployment triggering and monitoring
-- Cost visualization and comparison
-- Migration planning interface
+**Languages**: Python (active), Node.js (planned), Go (planned)
 
-**Technology**: React frontend, Go backend API
+**Key Features**:
+- Simple, intuitive APIs for cloud operations
+- Full type hints and IDE support
+- Zero runtime dependencies
+- Works in local development (with provider set)
 
-### 2. Discovery Engine
+**Example**:
+```python
+from infrar.storage import upload, download, list_objects
 
-**Purpose**: Analyze existing cloud infrastructure
-
-**Responsibilities**:
-- Connect to cloud accounts (read-only for discovery)
-- Scan resources (EC2, ECS, Lambda, RDS, etc.)
-- Identify resource relationships
-- Map resources to capabilities
-- Calculate current costs from billing data
-- Detect application dependencies
-
-**Inputs**: Cloud provider credentials (read-only)
-**Outputs**: Capability map, cost breakdown, resource inventory
-
-### 3. Cost Intelligence Engine
-
-**Purpose**: Provide pricing insights and comparisons
-
-**Responsibilities**:
-- Maintain pricing database for all providers
-- Calculate total cost of ownership (compute + storage + network + extras)
-- Compare equivalent implementations across providers
-- Generate cost projections
-- Track pricing changes over time
-- Calculate migration ROI
-
-**Data Sources**:
-- Provider pricing APIs (AWS Price List API, GCP Cloud Billing API, Azure Pricing API)
-- Historical billing data
-- Usage metrics
-
-### 4. Transformation Engine
-
-**Purpose**: Convert infrar SDK code to provider-specific code
-
-**Responsibilities**:
-- Parse user code (AST analysis)
-- Identify infrar SDK calls
-- Apply transformation rules
-- Generate provider-specific code
-- Validate generated code
-- Handle edge cases and errors
-
-**Inputs**: Source code with infrar SDK
-**Outputs**: Transformed code with provider SDK
-
-See: [Transformation Engine Details](transformation-engine.md)
-
-### 5. Capability Catalog
-
-**Purpose**: Define infrastructure capabilities and their implementations
-
-**Responsibilities**:
-- Store capability definitions
-- Map capabilities to provider services
-- Define cost models for each implementation
-- Specify feature coverage per implementation
-- Document cross-cloud interfaces
-
-**Schema**: YAML-based definitions
-
-See: [Capability Catalog Details](capability-catalog.md)
-
-### 6. Build & Deploy Pipeline
-
-**Purpose**: Build and deploy applications to cloud providers
-
-**Responsibilities**:
-- Clone user repository
-- Transform code (via Transformation Engine)
-- Build Docker images
-- Push to provider registries (ECR, Artifact Registry, ACR)
-- Generate OpenTofu configurations
-- Execute `tofu plan` and `tofu apply`
-- Monitor deployment status
-- Store deployment artifacts
-
-**Workflow**:
-```
-GitHub Push → Webhook → Clone Repo → Transform Code →
-Build Docker → Push to Registry → Generate OpenTofu →
-Apply Infrastructure → Deploy Application → Update Status
+upload(bucket='data', source='report.csv', destination='reports/report.csv')
+files = list_objects(bucket='data', prefix='reports/')
 ```
 
-### 7. Migration Orchestrator
+### 2. Transformation Engine (infrar-engine)
 
-**Purpose**: Plan and execute infrastructure migrations
+**Purpose**: Convert Infrar SDK calls to native provider SDK calls
 
-**Responsibilities**:
-- Analyze current infrastructure
-- Generate migration plan
-- Calculate costs and timeline
-- Provision target infrastructure (parallel deployment)
-- Orchestrate data migration
-- Manage DNS cutover
-- Monitor migration health
-- Rollback on failure
-- Cleanup source infrastructure
+**Process**:
+1. Parse user code into Abstract Syntax Tree (AST)
+2. Identify Infrar SDK usage patterns
+3. Load transformation rules from plugins
+4. Apply provider-specific transformations
+5. Generate native provider code
+6. Validate output
 
-**Migration Phases**:
-1. **Analysis**: Understand current state
-2. **Planning**: Generate migration plan with costs/timeline
-3. **Provision**: Deploy target infrastructure
-4. **Migrate**: Move data and configuration
-5. **Test**: Validate target infrastructure
-6. **Cutover**: Switch traffic
-7. **Monitor**: Ensure stability
-8. **Cleanup**: Decommission source
+**Input**: Code with Infrar SDK
+**Output**: Code with native provider SDK (boto3, google-cloud, azure-sdk)
 
-See: [Migration Details](../concepts/migration.md)
+### 3. Provider Plugin System (infrar-plugins)
 
-### 8. Data Layer
-
-#### PostgreSQL Database
-
-**Schema**:
-```sql
--- Users and authentication
-users (id, email, created_at, ...)
-
--- Projects
-projects (id, user_id, name, repo_url, created_at, ...)
-
--- Deployments
-deployments (
-    id, project_id, provider, region,
-    status, created_at, completed_at, ...
-)
-
--- Deployment configurations
-deployment_configs (
-    deployment_id, capability_type,
-    implementation, config_json, ...
-)
-
--- Provider credentials
-provider_credentials (
-    id, user_id, provider,
-    encrypted_credentials, created_at, ...
-)
-
--- Cost history
-cost_snapshots (
-    id, deployment_id, cost,
-    snapshot_date, breakdown_json, ...
-)
-
--- Migration history
-migrations (
-    id, project_id, source_provider,
-    target_provider, status, started_at, ...
-)
-```
-
-#### Object Storage
+**Purpose**: Externalize all provider-specific logic
 
 **Structure**:
 ```
-s3://infrar-configs/{project_id}/{deployment_id}/
-├── original/
-│   └── source_code/       # Original infrar SDK code
-├── transformed/
-│   └── source_code/       # Provider-specific transformed code
-├── terraform/
-│   ├── main.tf
-│   ├── variables.tf
-│   └── outputs.tf
-└── logs/
-    ├── transform.log
-    ├── build.log
-    └── deploy.log
-
-s3://infrar-state/{project_id}/{deployment_id}/
-└── terraform.tfstate       # OpenTofu state (encrypted)
+providers/
+├── {provider}/
+    ├── provider.yaml               # Provider metadata
+    ├── regions.yaml                # Available regions
+    ├── provider-defaults.yaml      # Default configuration
+    ├── pricing-metadata.yaml       # Cost data
+    │
+    ├── authentication/             # Authentication methods
+    │   └── {method}/
+    │       ├── method.yaml
+    │       ├── schema.yaml
+    │       ├── handler.yaml
+    │       └── ui-instructions.yaml
+    │
+    ├── services/                   # Service capabilities
+    │   └── {category}/{service}/
+    │       ├── service.yaml
+    │       ├── defaults.yaml
+    │       ├── terraform/main.tf
+    │       └── transform/rules.yaml
+    │
+    ├── terraform-config/           # Terraform templates
+    │   ├── provider-block.tf.tmpl
+    │   ├── backend.tf.tmpl
+    │   └── variables.tf.tmpl
+    │
+    └── orchestration/              # Bootstrap scripts
+        └── bootstrap-script.sh.tmpl
 ```
 
-#### Credential Vault
+**Key Principle**: Zero platform coupling - adding a provider requires no platform code changes
 
-**Purpose**: Securely store provider credentials
+### 4. Infrastructure Generation
 
-**Approach**:
-- **MVP**: PostgreSQL with encryption at rest
-- **Production**: HashiCorp Vault or cloud KMS
-- **Enterprise**: OIDC/Workload Identity (no long-lived keys)
+**Purpose**: Generate Terraform/OpenTofu configurations from capabilities
 
-**Security**:
-- Encryption at rest (AES-256)
-- Encryption in transit (TLS)
-- Audit logging for all access
-- Credential rotation policies
-- Least-privilege IAM policies
+**Process**:
+1. Detect capabilities from user code
+2. Load service terraform modules from plugins
+3. Render provider-specific templates
+4. Combine into complete terraform configuration
+5. Generate tfvars from provider defaults
 
-See: [Security Details](../technical/security.md)
+**Template Engine**: Go text/template with custom functions
+
+### 5. Deployment Pipeline
+
+**Purpose**: Execute infrastructure provisioning and application deployment
+
+**Steps**:
+1. Authenticate with provider (using authentication plugin)
+2. Run bootstrap script (enable APIs, create state bucket)
+3. Execute terraform init/plan/apply
+4. Build application container (if needed)
+5. Deploy application to provisioned infrastructure
+6. Validate deployment
+7. Report status
 
 ## Data Flow
+
+### Transformation Flow
+
+```
+┌──────────────────────┐
+│ User Code (Infrar SDK)│
+└──────────┬───────────┘
+           │
+           ↓
+┌──────────────────────┐
+│   AST Parsing         │  Parse Python/JS/Go code
+└──────────┬───────────┘
+           │
+           ↓
+┌──────────────────────┐
+│  Capability Detection │  Identify infrar.storage, infrar.compute, etc.
+└──────────┬───────────┘
+           │
+           ↓
+┌──────────────────────┐
+│ Load Transform Rules  │  From providers/{provider}/services/{service}/transform/
+└──────────┬───────────┘
+           │
+           ↓
+┌──────────────────────┐
+│  Apply Transformations│  Replace infrar calls with native SDK calls
+└──────────┬───────────┘
+           │
+           ↓
+┌──────────────────────┐
+│ Native Provider Code  │  Output: boto3/google-cloud/azure-sdk code
+└──────────────────────┘
+```
+
+### Infrastructure Generation Flow
+
+```
+┌──────────────────────┐
+│ Detected Capabilities │  e.g., [storage, compute]
+└──────────┬───────────┘
+           │
+           ↓
+┌──────────────────────┐
+│ Load Service Modules  │  From providers/{provider}/services/{service}/terraform/
+└──────────┬───────────┘
+           │
+           ↓
+┌──────────────────────┐
+│ Render Templates      │  provider-block.tf, variables.tf, backend.tf
+└──────────┬───────────┘
+           │
+           ↓
+┌──────────────────────┐
+│ Generate tfvars       │  From provider-defaults.yaml
+└──────────┬───────────┘
+           │
+           ↓
+┌──────────────────────┐
+│ Complete Terraform    │  Ready for terraform apply
+└──────────────────────┘
+```
 
 ### Deployment Flow
 
 ```
-1. User pushes code to GitHub
-   └─> GitHub webhook triggers Infrar
-
-2. Infrar clones repository
-   └─> Reads code and Dockerfile
-
-3. Code Analysis
-   ├─> Parse AST
-   ├─> Identify infrar SDK calls
-   └─> Validate code patterns
-
-4. Transformation
-   ├─> Apply transformation rules
-   ├─> Generate provider-specific code
-   └─> Validate generated code
-
-5. Build
-   ├─> Build Docker image (with transformed code)
-   ├─> Tag image
-   └─> Push to provider registry
-
-6. Infrastructure Provisioning
-   ├─> Load capability definitions
-   ├─> Generate OpenTofu configuration
-   ├─> Execute tofu plan
-   └─> Execute tofu apply
-
-7. Application Deployment
-   ├─> Deploy container to compute service
-   ├─> Configure networking
-   └─> Set environment variables
-
-8. Validation
-   ├─> Health checks
-   ├─> Log collection
-   └─> Update deployment status
-
-9. Notification
-   └─> Notify user (webhook, email, dashboard)
+┌──────────────────────┐
+│ User Triggers Deploy  │  Via platform UI or CLI
+└──────────┬───────────┘
+           │
+           ↓
+┌──────────────────────┐
+│ Setup Authentication  │  Load auth plugin, setup credentials
+└──────────┬───────────┘
+           │
+           ↓
+┌──────────────────────┐
+│ Run Bootstrap Script  │  Enable APIs, create state bucket
+└──────────┬───────────┘
+           │
+           ↓
+┌──────────────────────┐
+│ Execute Terraform     │  init → plan → apply
+└──────────┬───────────┘
+           │
+           ↓
+┌──────────────────────┐
+│ Deploy Application    │  Build container, push to registry, deploy
+└──────────┬───────────┘
+           │
+           ↓
+┌──────────────────────┐
+│ Validate & Report     │  Health checks, update status
+└──────────────────────┘
 ```
 
-### Migration Flow
+## Technology Stack
 
-```
-1. User initiates migration
-   └─> Selects target provider
+| Component | Technology | Rationale |
+|-----------|-----------|-----------|
+| **Platform Backend** | Go (Gin framework) | Performance, concurrency, strong typing |
+| **Transformation Engine** | Go | Fast AST parsing, easy plugin system |
+| **Frontend** | React + Next.js | Rich ecosystem, SSR support |
+| **Database** | PostgreSQL | Reliability, JSONB support, mature |
+| **Template Engine** | Go text/template | Native, powerful, well-documented |
+| **IaC** | OpenTofu | Open-source, Terraform-compatible |
+| **Container Runtime** | Docker | Industry standard, widely supported |
 
-2. Current State Analysis
-   ├─> Read OpenTofu state
-   ├─> Identify all resources
-   └─> Calculate current costs
+## Security Architecture
 
-3. Target State Planning
-   ├─> Select equivalent capabilities
-   ├─> Calculate target costs
-   └─> Generate migration plan
+### Authentication
 
-4. User Review & Approval
-   ├─> Show cost comparison
-   ├─> Show timeline estimate
-   └─> Show risks and mitigation
+- **Multi-Method Support**: Each provider can have multiple auth methods
+- **Plugin-Based**: Authentication logic in plugins, not platform
+- **Credential Isolation**: Credentials encrypted at rest, never logged
+- **Least Privilege**: Service accounts with minimal required permissions
 
-5. Parallel Deployment
-   ├─> Retrieve original infrar SDK code
-   ├─> Transform for target provider
-   ├─> Build new Docker image
-   ├─> Provision target infrastructure
-   └─> Deploy application (parallel to existing)
+### Data Protection
 
-6. Data Migration (if applicable)
-   ├─> Export from source
-   ├─> Transform schema
-   └─> Import to target
+- **Encryption at Rest**: AES-256 encryption for stored credentials
+- **Encryption in Transit**: TLS 1.3 for all communications
+- **Secret Management**: HashiCorp Vault or cloud KMS for production
+- **Audit Logging**: All credential access logged
 
-7. Testing Phase
-   ├─> Run health checks
-   ├─> Validate functionality
-   └─> Performance testing
+### Infrastructure Security
 
-8. DNS Cutover
-   ├─> Update DNS records (blue-green)
-   ├─> Monitor traffic split
-   └─> Gradually shift traffic
-
-9. Monitoring Phase
-   ├─> Watch for errors
-   ├─> Compare performance
-   └─> Validate costs
-
-10. Cleanup (after stability confirmed)
-    ├─> Destroy source infrastructure
-    ├─> Remove old DNS entries
-    └─> Archive old configs
-```
+- **State File Security**: Terraform state encrypted and access-controlled
+- **Network Isolation**: Private networks for sensitive workloads
+- **IAM Best Practices**: Role-based access, temporary credentials
+- **Security Scanning**: Automated scanning for vulnerabilities
 
 ## Scalability Considerations
 
 ### Horizontal Scaling
 
-- **API Gateway**: Stateless, can run multiple instances behind load balancer
+- **API Servers**: Stateless, scale behind load balancer
 - **Transformation Workers**: Queue-based, add workers as needed
-- **Build Workers**: Containerized, run on Kubernetes/ECS
-- **Database**: PostgreSQL with read replicas for queries
+- **Database**: Read replicas for query scaling
 
 ### Async Processing
 
-- **Build Pipeline**: Queue-based (Redis/RabbitMQ)
-- **Deployments**: Long-running tasks in background workers
-- **Migrations**: Multi-phase with checkpoints
+- **Transformation Jobs**: Background queue (Redis/RabbitMQ)
+- **Deployments**: Long-running jobs in workers
+- **Checkpointing**: Save state for resumable operations
 
 ### Caching
 
-- **Pricing Data**: Cache with TTL (refresh daily)
-- **Capability Catalog**: In-memory cache
-- **Transformation Rules**: Compiled and cached
+- **Provider Metadata**: Cache in-memory, refresh periodically
+- **Template Compilation**: Compile once, cache
+- **Transformation Rules**: Load once per provider
 
-## Security Architecture
+## Extensibility
 
-### Defense in Depth
+### Adding a New Provider
 
-```
-┌─────────────────────────────────────┐
-│ Layer 1: Network Security          │
-│ - TLS everywhere                    │
-│ - Firewall rules                    │
-│ - DDoS protection                   │
-└─────────────────────────────────────┘
-          ↓
-┌─────────────────────────────────────┐
-│ Layer 2: Authentication             │
-│ - OAuth 2.0                         │
-│ - MFA support                       │
-│ - Session management                │
-└─────────────────────────────────────┘
-          ↓
-┌─────────────────────────────────────┐
-│ Layer 3: Authorization              │
-│ - RBAC (Role-Based Access Control)  │
-│ - Project-level permissions         │
-│ - Resource-level policies           │
-└─────────────────────────────────────┘
-          ↓
-┌─────────────────────────────────────┐
-│ Layer 4: Data Protection            │
-│ - Encryption at rest                │
-│ - Encryption in transit             │
-│ - Secrets management (Vault)        │
-└─────────────────────────────────────┘
-          ↓
-┌─────────────────────────────────────┐
-│ Layer 5: Audit & Monitoring         │
-│ - Access logs                       │
-│ - Action audit trail                │
-│ - Anomaly detection                 │
-└─────────────────────────────────────┘
-```
+1. Create provider directory in infrar-plugins
+2. Add provider metadata files
+3. Add authentication method(s)
+4. Add service capabilities
+5. Add terraform templates
+6. Test and submit PR
 
-### Credential Isolation
+**No platform code changes required!**
 
-Each customer's cloud credentials are:
-- Encrypted with unique key
-- Stored in secure vault
-- Never logged or exposed
-- Used only for specific deployments
-- Audited on every access
+### Adding a New Service
 
-See: [Security Details](../technical/security.md)
+1. Create service directory under existing provider
+2. Add service.yaml and defaults.yaml
+3. Add terraform/main.tf module
+4. Add transform/rules.yaml
+5. Test and submit PR
 
-## Reliability & Disaster Recovery
+### Adding a New Authentication Method
 
-### High Availability
+1. Create auth method directory
+2. Add 4 YAML files (method, schema, handler, ui-instructions)
+3. Test validation
+4. Submit PR
 
-- **Database**: Multi-AZ PostgreSQL with automated backups
-- **API**: Multi-region deployment with failover
-- **State Files**: Replicated across regions
-- **Critical Data**: Real-time replication
+## Design Principles
 
-### Backup Strategy
-
-- **Database**: Daily automated backups, 30-day retention
-- **OpenTofu State**: Versioned object storage
-- **Source Code**: Stored in Infrar + user's GitHub
-- **Configurations**: Immutable, versioned
-
-### Disaster Recovery
-
-- **RTO (Recovery Time Objective)**: 1 hour
-- **RPO (Recovery Point Objective)**: 5 minutes
-- **Procedure**:
-  1. Failover to backup region
-  2. Restore database from latest backup
-  3. Verify state file integrity
-  4. Resume operations
-
-## Monitoring & Observability
-
-### Metrics
-
-- **System Metrics**: CPU, memory, disk, network
-- **Application Metrics**: Request rate, error rate, latency
-- **Business Metrics**: Deployments/day, migrations/week, cost savings
-
-### Logging
-
-- **Centralized Logging**: All logs aggregated (CloudWatch, Stackdriver, etc.)
-- **Structured Logging**: JSON format for parsing
-- **Log Retention**: 90 days standard, 1 year for audit logs
-
-### Tracing
-
-- **Distributed Tracing**: OpenTelemetry for request flows
-- **Performance Monitoring**: Identify bottlenecks
-
-### Alerting
-
-- **Critical**: System failures, security incidents
-- **Warning**: High error rates, slow responses
-- **Info**: Deployment completions, migrations started
-
-## Technology Choices
-
-| Component | Technology | Rationale |
-|-----------|-----------|-----------|
-| API Backend | Go (Gin) | High performance, great concurrency, strong typing |
-| Frontend | React | Rich ecosystem, component-based, widely adopted |
-| Database | PostgreSQL | Reliable, JSONB support, full-text search, mature |
-| Message Queue | Redis | Fast, simple, pub/sub + queue capabilities |
-| Container Orchestration | Kubernetes/ECS | Scalable, self-healing, widely supported |
-| IaC Engine | OpenTofu | Open-source, provider-agnostic, Terraform-compatible |
-| AST Parsing | Python: ast, Node.js: @babel/parser | Language-native, battle-tested |
-| Secrets Management | HashiCorp Vault | Industry standard, audit trails, rotation |
+1. **Provider Agnostic**: Platform code knows nothing about AWS/GCP/Azure specifics
+2. **Template Driven**: All code generation uses templates, not string concatenation
+3. **Plugin Based**: All provider logic externalized to plugins
+4. **Configuration as Code**: Everything defined in YAML, versionable
+5. **Zero Coupling**: Adding providers/services requires zero platform changes
+6. **Open Core**: Core transformation engine is open source, platform is proprietary
 
 ## Next Steps
 
-1. Review [Repository Structure](repository-structure.md) for codebase organization and repository details
-2. Review [Transformation Engine](transformation-engine.md) for code transformation details
-3. Review [Capability Catalog](capability-catalog.md) for capability definitions
-4. Review [Multi-Cloud Orchestration](multi-cloud-orchestration.md) for cross-cloud communication
-5. See [MVP Phase 1](../mvp/phase-1.md) for initial implementation plan
+- See [Provider Plugin System](../concepts/plugins.md) for plugin architecture details
+- See [Repository Structure](repository-structure.md) for codebase organization
+- See [CONTRIBUTING.md](../CONTRIBUTING.md) for how to add providers
+- See [Authentication Plugins](authentication-plugins.md) for auth system details
+- See [Template Engine](template-engine.md) for template system details
